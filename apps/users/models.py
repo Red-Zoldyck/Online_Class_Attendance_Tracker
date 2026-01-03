@@ -1,4 +1,7 @@
 """
+@Red-Zoldyck - Online Class Attendance Tracker
+Part of the Online Class Attendance Tracker system
+
 User models for the Attendance Tracker.
 
 Models:

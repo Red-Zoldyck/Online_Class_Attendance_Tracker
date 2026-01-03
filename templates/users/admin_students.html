@@ -1,0 +1,245 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin – Students</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #667eea;
+            --accent-2: #764ba2;
+            --border: #e2e8f0;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        .navbar { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .navbar-brand { font-weight: 800; letter-spacing: -0.02em; }
+        .page { max-width: 1200px; margin: 0 auto; padding: 28px 16px 40px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        .badge.section { background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); font-weight: 600; }
+        .search-box { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fff; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}">🎓 Attendance Tracker</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:list' %}">Classes</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-reports:dashboard' %}">Reports</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-academics' %}">Admin Academics</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-students' %}">Students</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-instructor-applications' %}">Instructor Applications</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:schedule-assignment' %}">Schedule Assignment</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_full_name|default:user.email }}</a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="{% url 'web-users:profile' %}">Profile</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'web-users:logout' %}">Logout</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+{% if messages %}
+<div class="container mt-3">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="page">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="h4 mb-1">Student Directory</h1>
+            <div class="text-muted">Admin-managed student list with section context.</div>
+        </div>
+        <div class="d-flex flex-column flex-sm-row gap-2 align-items-sm-center">
+            <form method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="import_csv">
+                <input type="file" name="file" accept=".csv" class="form-control form-control-sm" required>
+                <button class="btn btn-success btn-sm" type="submit">Import CSV</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card p-3 mb-3">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" for="filterSearch">Search</label>
+                <input id="filterSearch" type="text" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Name, email, SR code">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="filterSection">Section</label>
+                <select id="filterSection" name="section" class="form-select form-select-sm">
+                    <option value="">All sections</option>
+                    {% for section in sections %}
+                        <option value="{{ section.id }}" {% if filter_section == section.id|stringformat:'s' %}selected{% endif %}>{{ section.program.code }} Y{{ section.year_level.number }} {{ section.code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="filterTerm">Term</label>
+                <select id="filterTerm" name="term" class="form-select form-select-sm">
+                    <option value="">All terms</option>
+                    {% for term in terms %}
+                        <option value="{{ term.id }}" {% if filter_term == term.id|stringformat:'s' %}selected{% endif %}>{{ term.program.code }} Y{{ term.year_level.number }} T{{ term.term }} {{ term.school_year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="filterSort">Sort by</label>
+                <select id="filterSort" name="sort" class="form-select form-select-sm">
+                    <option value="last_name" {% if sort_by == 'last_name' %}selected{% endif %}>Last name</option>
+                    <option value="first_name" {% if sort_by == 'first_name' %}selected{% endif %}>First name</option>
+                    <option value="email" {% if sort_by == 'email' %}selected{% endif %}>Email</option>
+                    <option value="student_number" {% if sort_by == 'student_number' %}selected{% endif %}>Student #</option>
+                    <option value="section" {% if sort_by == 'section' %}selected{% endif %}>Section</option>
+                    <option value="enrollments" {% if sort_by == 'enrollments' %}selected{% endif %}>Enrollments</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-grid">
+                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="alert alert-info small d-flex justify-content-between align-items-center">
+        <div>
+            <strong>CSV columns (section-driven):</strong> section (required), student_number (required), name (Last, First) or first_name/last_name, email (optional), phone_number (optional), term (optional), school_year (optional).<br>
+            If email is blank, a placeholder is set; students can update after first login. Username = student_number; password = last_name + last 4 of student_number. Section determines program/year; the importer will pick the matching term (provided or latest), sync section-course entries, and auto-enroll.
+        </div>
+        {% if search or filter_section or filter_term %}
+        <a href="{% url 'web-users:admin-students' %}" class="btn btn-sm btn-outline-secondary">Clear filters</a>
+        {% endif %}
+    </div>
+
+    <div class="card p-3 mb-3">
+        <h6 class="text-uppercase text-muted">Assign Section to Student</h6>
+        <form method="post" class="row g-2 align-items-end">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="assign_section">
+            <div class="col-md-4">
+                <label class="form-label" for="assignStudentNumber">Student Number</label>
+                <input id="assignStudentNumber" type="text" name="student_number" class="form-control" placeholder="e.g., 04141-25-1234" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="assignSection">Section</label>
+                <select id="assignSection" name="section_id" class="form-select" required>
+                    <option value="" disabled selected>Select section</option>
+                    {% for section in sections %}
+                        <option value="{{ section.id }}">{{ section.program.code }} Y{{ section.year_level.number }} {{ section.code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="assignTerm">Term</label>
+                <select id="assignTerm" name="term_id" class="form-select" required>
+                    <option value="" disabled selected>Select term</option>
+                    {% for term in terms %}
+                        <option value="{{ term.id }}">{{ term.program.code }} Y{{ term.year_level.number }} T{{ term.term }} {{ term.school_year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1 d-grid">
+                <button type="submit" class="btn btn-primary">Assign</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card p-3 mb-3">
+        <h6 class="text-uppercase text-muted">Sync Enrollments</h6>
+        <p class="text-muted small mb-2">Backfill enrollments for existing student-section links into matching section-course offerings.</p>
+        <form method="post" class="row g-2 align-items-end">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="sync_enrollments">
+            <div class="col-md-5">
+                <label class="form-label" for="syncSection">Section (optional)</label>
+                <select id="syncSection" name="section_id" class="form-select">
+                    <option value="" selected>All sections</option>
+                    {% for section in sections %}
+                        <option value="{{ section.id }}">{{ section.program.code }} Y{{ section.year_level.number }} {{ section.code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" for="syncTerm">Term (optional)</label>
+                <select id="syncTerm" name="term_id" class="form-select">
+                    <option value="" selected>All terms</option>
+                    {% for term in terms %}
+                        <option value="{{ term.id }}">{{ term.program.code }} Y{{ term.year_level.number }} T{{ term.term }} {{ term.school_year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-secondary">Sync</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card p-3">
+        {% if students %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>SR / Student #</th>
+                        <th>Section</th>
+                        <th>Term / SY</th>
+                        <th>Active Enrollments</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td>{{ student.get_full_name|default:student.email }}</td>
+                        <td class="text-muted">{{ student.email }}</td>
+                        <td>{{ student.student_number|default:'—' }}</td>
+                        <td>
+                            {% if student.section_program %}
+                            <span class="badge section">{{ student.section_program }}{% if student.section_year %} Y{{ student.section_year }}{% endif %} {{ student.section_code }}</span>
+                            {% else %}
+                            <span class="text-muted small">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted">
+                            {% if student.section_term %}
+                                T{{ student.section_term }} · {{ student.section_sy|default:'-' }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>{{ student.active_enrollments|default:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-muted">No students found.</div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

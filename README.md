@@ -6,15 +6,33 @@ A production-ready Django web application for managing and tracking attendance i
 
 - **User Management**: Role-based access control (Admin, Instructor, Student)
 - **Class Management**: Create and manage online classes with enrollment
-- **Session Management**: Track individual class sessions
-- **Attendance Tracking**: Mark and record student attendance
+- **Session Management**: Track individual class sessions with schedule enforcement
+- **Attendance Tracking**: Mark student attendance with multiple statuses (Present, Absent, Late, Excused)
+- **Schedule Constraints**: Attendance window (6 AM open) → 4-hour per-student mark lock → 8-hour report deadline
 - **Real-time Reporting**: Generate attendance reports and analytics
+- **Web Reports Dashboard**: View attendance by section and course with filtering, date range selection, and print functionality
+- **Real-time Digital Clock**: 12-hour format clock with date display on attendance marking page
+- **CSV Import**: Case-insensitive student import with flexible name parsing and title-casing
 - **RESTful API**: Complete REST API with JWT authentication
-- **Web Interface**: User-friendly web dashboard
-- **Security**: Comprehensive security features including JWT, CSRF protection, SQL injection prevention
+- **Web Interface**: User-friendly web dashboard with unified navigation
+- **Admin Dashboard**: Manage academics, approve instructor applications, sync enrollments
+- **Security**: JWT authentication, CSRF protection, SQL injection prevention, role-based access control
 - **Scalability**: Built for production deployment with optimization considerations
 
 ## 🚀 Quick Start
+
+### One Command Setup (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 -ImportStudents
+```
+
+What it does:
+- Creates venv (if missing) and installs requirements
+- Sets MySQL env vars (defaults: db=attendance_tracker, user=root, pass=@dmin123, host=localhost, port=3306)
+- Applies migrations
+- Seeds default groups/permissions
+- Imports students from `Dump20260102.sql` when `-ImportStudents` is passed (skip the flag to avoid importing)
 
 ### Prerequisites
 
@@ -91,11 +109,12 @@ Access the application at `http://localhost:8000`
 ### Technology Stack
 
 **Backend**:
-- Django 4.2 LTS
-- Django REST Framework
-- MySQL
-- Celery (Task Queue)
-- Redis (Caching)
+- Django 5.1.3
+- Django REST Framework 3.14.0
+- MySQL 8.0+ with mysql-connector-python
+- Celery 5.3.4 (Task Queue)
+- Redis (Caching & Message Broker)
+- Daphne 4.2.1 (ASGI Server)
 
 **Frontend**:
 - Django Templates
@@ -103,7 +122,7 @@ Access the application at `http://localhost:8000`
 - JavaScript (ES6+)
 
 **Infrastructure**:
-- Gunicorn/Daphne
+- Gunicorn 21.2.0 / Daphne 4.2.1
 - Nginx
 - Docker-compatible
 
@@ -133,6 +152,22 @@ attendance_tracker/
 - **Password Security**: PBKDF2 hashing with complexity requirements
 - **Login Protection**: Account lockout after 5 failed attempts
 - **API Security**: CSRF protection, SQL injection prevention via ORM
+
+---
+
+## 👨‍💼 Admin Account Registration
+
+To register as an **Admin**, use the following code during registration:
+
+**Admin Code**: `@dm|n@2o2G!`
+
+Steps to create an admin account:
+1. Go to the registration page (`/register`)
+2. Select "Admin" as your role
+3. Enter the admin code when prompted
+4. Complete the registration form and submit
+
+⚠️ **Keep this code secure** - share only with authorized personnel
 - **HTTP Security**: Security headers (HSTS, CSP, X-Frame-Options)
 - **Data Protection**: Secrets stored in .env, secure session cookies
 
@@ -365,9 +400,9 @@ This project is built with best practices for production systems.
 ## 📅 Version
 
 **Version**: 1.0.0  
-**Last Updated**: December 30, 2024  
+**Last Updated**: January 3, 2026  
 **Python**: 3.10+  
-**Django**: 4.2 LTS  
+**Django**: 5.1.3  
 
 ---
 

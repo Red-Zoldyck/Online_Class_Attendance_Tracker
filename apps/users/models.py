@@ -120,6 +120,13 @@ class User(AbstractUser):
         validators=[EmailValidator()],
         help_text=_("User's email address")
     )
+    student_number = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text=_("Student SR code/number")
+    )
     phone_number = models.CharField(
         max_length=20,
         blank=True,

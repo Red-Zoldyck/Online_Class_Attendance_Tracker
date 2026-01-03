@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ section_course.course.code }} – {{ section_course.section.code }}</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <style>
+        :root {
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #4f46e5;
+            --accent-soft: #eef2ff;
+            --border: #e2e8f0;
+            --success: #16a34a;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        .page { max-width: 1100px; margin: 0 auto; padding: 28px 16px 40px; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.01em; }
+        .subtitle { color: var(--muted); }
+        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; background: #dcfce7; color: var(--success); border: 1px solid var(--border); }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+        .label { color: var(--muted); font-size: 0.92rem; }
+        .value { font-weight: 700; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; }
+        th { background: #f8fafc; font-weight: 700; color: var(--muted); }
+        tr:last-child td { border-bottom: none; }
+        .empty { padding: 18px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; color: var(--muted); }
+        .status-buttons { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+        .status-buttons button { border: 1px solid var(--border); background: #fff; color: var(--text); padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.15s ease; }
+        .status-buttons button:hover { border-color: var(--accent); color: var(--accent); }
+        .status-buttons button.active[data-status="present"], .status-buttons button[data-status="present"]:active { background: #dcfce7; color: var(--success); border-color: #bbf7d0; }
+        .status-buttons button.active[data-status="absent"], .status-buttons button[data-status="absent"]:active { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+        .status-buttons button.active[data-status="late"], .status-buttons button[data-status="late"]:active { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+        .status-buttons button.active[data-status="excused"], .status-buttons button[data-status="excused"]:active { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+        .clock-card { 
+            background: transparent; 
+            color: #0f172a; 
+            border-radius: 16px; 
+            padding: 16px 20px;
+            box-shadow: none;
+            z-index: auto;
+            min-width: 160px;
+            margin-bottom: 16px;
+            border: 2px solid #667eea;
+        }
+        .clock-display { 
+            font-size: 2.5rem; 
+            font-weight: 800; 
+            font-family: 'Courier New', monospace; 
+            letter-spacing: 1px; 
+            text-align: center;
+            line-height: 1.2;
+            color: #667eea;
+        }
+        .clock-label { 
+            text-align: center; 
+            opacity: 0.7; 
+            font-size: 0.85rem; 
+            margin-bottom: 8px;
+            color: #475569;
+        }
+        @media (max-width: 768px) {
+            .clock-card {
+                padding: 12px 14px;
+            }
+            .clock-display {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <p><a href="{% url 'web-classes:list' %}">&#8592; Back to classes</a></p>
+
+        <!-- Digital Clock (Embedded) -->
+        <div class="clock-card">
+            <div class="clock-label">Current Time</div>
+            <div class="clock-display" id="clock">--:--:--</div>            <div class="clock-date" id="date" style="text-align: center; font-size: 0.95rem; margin-top: 8px; color: #475569;">--</div>        </div>
+
+        <header>
+            <div>
+                <h1>{{ section_course.course.code }} • {{ section_course.section.code }}</h1>
+                <div class="subtitle">{{ section_course.course.title }} — {{ section_course.term }}</div>
+            </div>
+            <span class="badge">{% if section_course.is_active %}Active{% else %}Inactive{% endif %}</span>
+        </header>
+
+        <div class="card" style="margin-bottom: 16px; display: grid; gap: 8px;">
+            <div class="label">Today</div>
+            <div class="value">{{ current_session.date|date:"M d, Y" }}</div>
+            <div class="label">Attendance window</div>
+            <div class="value">Opens {{ open_time|date:"H:i" }} · Locks 4h after mark · Reports close 8h after lock</div>
+            <div class="label">Rule</div>
+            <div class="value">{{ lock_rule }}</div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="label">Instructor</div>
+                <div class="value">{% if section_course.instructor %}{{ section_course.instructor.get_full_name|default:section_course.instructor.email }}{% else %}Unassigned{% endif %}</div>
+            </div>
+            <div class="card">
+                <div class="label">Schedule</div>
+                <div class="value">{{ section_course.schedule|default:"TBA" }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Capacity</div>
+                <div class="value">{{ section_course.capacity }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Term</div>
+                <div class="value">{{ section_course.term }}</div>
+            </div>
+            {% if section_course.platform_url %}
+            <div class="card">
+                <div class="label">Platform</div>
+                <div class="value"><a href="{{ section_course.platform_url }}" target="_blank" rel="noopener">Open link</a></div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div style="margin-bottom: 8px; font-weight: 700;">Students in this section</div>
+        {% if enrollments %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Student #</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for enrollment in enrollments %}
+                <tr>
+                    <td>{{ enrollment.student.get_full_name|default:enrollment.student.email }}</td>
+                    <td>{{ enrollment.student.student_number|default:'—' }}</td>
+                    <td>
+                        {% if user.is_superuser or user.role and user.role.name in 'admin,instructor' %}
+                        <div class="status-buttons" data-status-group>
+                            <button type="button" data-status="present" data-student="{{ enrollment.student.id }}" {% if enrollment.current_status == 'present' %}class="active"{% endif %}>Present</button>
+                            <button type="button" data-status="absent" data-student="{{ enrollment.student.id }}" {% if enrollment.current_status == 'absent' %}class="active"{% endif %}>Absent</button>
+                            <button type="button" data-status="late" data-student="{{ enrollment.student.id }}" {% if enrollment.current_status == 'late' %}class="active"{% endif %}>Late</button>
+                            <button type="button" data-status="excused" data-student="{{ enrollment.student.id }}" {% if enrollment.current_status == 'excused' %}class="active"{% endif %}>Excused</button>
+                            <input type="text" class="form-control form-control-sm" name="note" placeholder="Note (for excused)" data-note-input style="margin-top:6px; min-width: 180px;" value="{{ enrollment.current_note }}" />
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">Status: {{ enrollment.current_status|default:'—' }}{% if enrollment.current_note %} · Note: {{ enrollment.current_note }}{% endif %}</div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif section_members %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Student #</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for membership in section_members %}
+                <tr>
+                    <td>{{ membership.student.get_full_name|default:membership.student.email }}</td>
+                    <td>{{ membership.student.student_number|default:'—' }}</td>
+                    <td>
+                        {% if user.is_superuser or user.role and user.role.name in 'admin,instructor' %}
+                        <div class="status-buttons" data-status-group>
+                            <button type="button" data-status="present" data-student="{{ membership.student.id }}" {% if membership.current_status == 'present' %}class="active"{% endif %}>Present</button>
+                            <button type="button" data-status="absent" data-student="{{ membership.student.id }}" {% if membership.current_status == 'absent' %}class="active"{% endif %}>Absent</button>
+                            <button type="button" data-status="late" data-student="{{ membership.student.id }}" {% if membership.current_status == 'late' %}class="active"{% endif %}>Late</button>
+                            <button type="button" data-status="excused" data-student="{{ membership.student.id }}" {% if membership.current_status == 'excused' %}class="active"{% endif %}>Excused</button>
+                            <input type="text" class="form-control form-control-sm" name="note" placeholder="Note (for excused)" data-note-input style="margin-top:6px; min-width: 180px;" value="{{ membership.current_note }}" />
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">Status: {{ membership.current_status|default:'—' }}{% if membership.current_note %} · Note: {{ membership.current_note }}{% endif %}</div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <div class="empty">No students are associated with this section yet.</div>
+        {% endif %}
+    </div>
+
+    {% if user.role and user.role.name == 'student' %}
+    <div class="card" style="margin-top: 14px; padding: 16px;">
+        <div style="font-weight: 700; margin-bottom: 6px;">Report an attendance issue</div>
+        {% if report_window_open %}
+            <p class="text-muted" style="margin-top: 0;">You have until {{ report_deadline|date:"M d, Y H:i" }} to submit a correction.</p>
+            <form id="report-form" class="d-flex flex-column" style="gap: 8px;">
+                <input type="hidden" name="action" value="report_issue">
+                <label class="label" for="claimed_status">Claimed status</label>
+                <select name="claimed_status" id="claimed_status" class="form-select">
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="absent">Absent</option>
+                    <option value="excused">Excused</option>
+                </select>
+                <label class="label" for="issue_note">Notes (optional)</label>
+                <textarea id="issue_note" name="note" class="form-control" rows="3" placeholder="Describe the discrepancy."></textarea>
+                <button type="submit" class="btn btn-primary" style="align-self: flex-start;">Submit report</button>
+            </form>
+            <div id="report-status" class="text-muted small" style="margin-top: 6px;"></div>
+        {% elif now < lock_deadline %}
+            <p class="text-muted" style="margin: 0;">Reporting opens after attendance is locked.</p>
+        {% else %}
+            <p class="text-muted" style="margin: 0;">Reporting window has closed.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    <script>
+        // Initialize clock first
+        document.addEventListener('DOMContentLoaded', function() {
+            const clockEl = document.getElementById('clock');
+            const dateEl = document.getElementById('date');
+            if (clockEl) {
+                function updateClock() {
+                    const now = new Date();
+                    let hours = now.getHours();
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const seconds = String(now.getSeconds()).padStart(2, '0');
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    hours = hours % 12;
+                    hours = hours ? hours : 12;
+                    const hoursStr = String(hours).padStart(2, '0');
+                    clockEl.textContent = `${hoursStr}:${minutes}:${seconds} ${ampm}`;
+                    
+                    // Update date
+                    if (dateEl) {
+                        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                        dateEl.textContent = now.toLocaleDateString('en-US', options);
+                    }
+                }
+                
+                updateClock();
+                setInterval(updateClock, 1000);
+            }
+        });
+
+        (function() {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const openTime = '{{ open_time|date:"c" }}';
+            const reportDeadline = '{{ report_deadline|date:"c" }}';
+
+            function isBeforeOpen() {
+                if (!openTime) return false;
+                return new Date() < new Date(openTime);
+            }
+
+            function setGroupActive(group, status) {
+                group.querySelectorAll('button[data-status]').forEach(function(other) {
+                    other.classList.toggle('active', other.dataset.status === status);
+                });
+            }
+
+            document.querySelectorAll('[data-status-group]').forEach(function(group) {
+                group.addEventListener('click', function (event) {
+                    const btn = event.target.closest('button[data-status]');
+                    if (!btn) return;
+                    if (isBeforeOpen()) {
+                        alert('Attendance opens at 6:00 AM.');
+                        return;
+                    }
+
+                    const noteInput = group.querySelector('[data-note-input]');
+                    const noteVal = noteInput ? noteInput.value.trim() : '';
+
+                    const payload = new URLSearchParams();
+                    payload.append('student_id', btn.dataset.student);
+                    payload.append('status', btn.dataset.status);
+                    if (noteVal) {
+                        payload.append('note', noteVal);
+                    }
+
+                    fetch(window.location.pathname, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: payload.toString(),
+                    }).then(async (res) => {
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                            alert(data.message || 'Failed to update attendance.');
+                            return;
+                        }
+                        setGroupActive(group, btn.dataset.status);
+                        if (btn.dataset.status !== 'excused' && noteInput) {
+                            noteInput.value = '';
+                        }
+                    }).catch(() => {
+                        alert('Network error while marking attendance.');
+                    });
+                });
+            });
+
+            const reportForm = document.getElementById('report-form');
+            if (reportForm) {
+                reportForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    const now = new Date();
+                    if (reportDeadline && now > new Date(reportDeadline)) {
+                        alert('Reporting window has closed.');
+                        return;
+                    }
+
+                    const formData = new URLSearchParams(new FormData(reportForm));
+                    fetch(window.location.pathname, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: formData.toString(),
+                    }).then(async (res) => {
+                        const data = await res.json().catch(() => ({}));
+                        const statusEl = document.getElementById('report-status');
+                        if (!res.ok) {
+                            statusEl.textContent = data.message || 'Failed to submit report.';
+                            statusEl.classList.add('text-danger');
+                            return;
+                        }
+                        statusEl.textContent = data.message || 'Report submitted. Admin will review.';
+                        statusEl.classList.remove('text-danger');
+                        reportForm.reset();
+                    }).catch(() => {
+                        const statusEl = document.getElementById('report-status');
+                        statusEl.textContent = 'Network error while submitting report.';
+                        statusEl.classList.add('text-danger');
+                    });
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

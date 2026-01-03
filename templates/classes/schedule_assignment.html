@@ -1,0 +1,353 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Assignment - Attendance Tracker</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.css' %}">
+    <style>
+        body { background-color: #f5f7fa; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .navbar-brand { font-weight: 700; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .card-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; font-weight: 600; }
+        .filter-card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        .table thead { background: #f0f2f8; }
+        .schedule-input { font-size: 14px; }
+        .btn-update { font-size: 14px; padding: 5px 15px; }
+        .section-group { background: #f8f9fc; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
+        .section-header { font-weight: 600; color: #4338ca; margin-bottom: 10px; }
+        .course-row { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        .badge-instructor { background: #dbeafe; color: #1e40af; }
+        .badge-no-instructor { background: #fee2e2; color: #991b1b; }
+        .floating-alerts {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 400px;
+        }
+        .floating-alerts .alert {
+            animation: slideIn 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}"><i class="bi bi-calendar3"></i> Schedule Assignment</a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:dashboard' %}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-reports:dashboard' %}">Reports</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-academics' %}">Academics</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:logout' %}">Logout</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+{% if messages %}
+<div class="floating-alerts">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="container py-4">
+    <!-- Import CSV Card -->
+    <div class="card mb-4" style="border-top: 4px solid #667eea;">
+        <div class="card-header">
+            <i class="bi bi-file-earmark-csv"></i> Import Schedules from CSV
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="import_csv">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label" for="schedule_file">Select CSV File</label>
+                        <input id="schedule_file" type="file" name="schedule_file" class="form-control" accept=".csv" required>
+                        <small class="text-muted">Upload CSV with CODE, DESCRIPTION, section, Name, and DAYS/TIME/ROOM (combined into Schedule)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="import_school_year">School Year</label>
+                        <input id="import_school_year" type="text" name="import_school_year" class="form-control" placeholder="2025-2026" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="import_program_id">Program</label>
+                        <select id="import_program_id" name="import_program_id" class="form-select" required>
+                            <option value="">Select program...</option>
+                            {% for program in programs %}
+                                <option value="{{ program.id }}">{{ program.code }} - {{ program.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-3 align-items-end mt-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="import_mode">Import Mode</label>
+                        <select id="import_mode" name="import_mode" class="form-select" required>
+                            <option value="all">All columns (course, section, instructor, schedule)</option>
+                            <option value="schedule_only">Schedule-only (DAYS, TIME, ROOM, SECTION, CODE, instructor, TERM)</option>
+                            <option value="courses_only">Courses only (CODE + description)</option>
+                            <option value="sections_only">Sections only</option>
+                            <option value="courses_sections_exact_instructor">Courses + sections, instructors only on exact name match</option>
+                        </select>
+                        <small class="text-muted">Choose what to apply from the CSV.</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="skip_rows">Skip row numbers (optional)</label>
+                        <input id="skip_rows" type="text" name="skip_rows" class="form-control" placeholder="e.g., 2,5,10">
+                        <small class="text-muted">Comma-separated row numbers (header is row 1).</small>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-upload"></i> Import CSV
+                    </button>
+                </div>
+                <small class="text-muted mt-3 d-block">
+                    <strong>Note:</strong> The CSV TERM/SEM column now drives term assignment per row; no semester dropdown. School year is applied to all rows. "Skip rows" lets you omit specific CSV rows by number.
+                </small>
+            </form>
+        </div>
+    </div>
+
+    <div class="filter-card">
+        <h5 class="mb-3"><i class="bi bi-funnel"></i> Filter Schedules</h5>
+        <form method="get" action="{% url 'web-classes:schedule-assignment' %}">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label" for="filterProgram">Program(s)</label>
+                    <select name="program" id="filterProgram" class="form-select" multiple>
+                        {% for program in programs %}
+                            <option value="{{ program.id }}" {% if program.id|stringformat:"s" in selected_program_ids %}selected{% endif %}>
+                                {{ program.code }} - {{ program.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Hold Ctrl/Cmd to pick multiple.</small>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="filterYearLevel">Year Level</label>
+                    <select name="year_level" id="filterYearLevel" class="form-select">
+                        <option value="">All Years</option>
+                        {% for year in year_levels %}
+                            <option value="{{ year.id }}" data-program="{{ year.program.id }}" {% if selected_year_id == year.id|stringformat:"s" %}selected{% endif %}>
+                                {{ year.program.code }} Y{{ year.number }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="filterSection">Section</label>
+                    <select name="section" id="filterSection" class="form-select">
+                        <option value="">All Sections</option>
+                        {% for section in sections %}
+                            <option value="{{ section.id }}" data-program="{{ section.program.id }}" data-year="{{ section.year_level.id }}" {% if selected_section_id == section.id|stringformat:"s" %}selected{% endif %}>
+                                {{ section.code }} ({{ section.program.code }} Y{{ section.year_level.number }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="filterTerm">Term</label>
+                    <select id="filterTerm" name="term" class="form-select">
+                        <option value="">All Terms</option>
+                        {% for term in terms %}
+                            <option value="{{ term.id }}" {% if selected_term_id == term.id|stringformat:"s" %}selected{% endif %}>
+                                {{ term.program.code }} Y{{ term.year_level.number }} T{{ term.term }} {{ term.school_year }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Apply Filters</button>
+                <a href="{% url 'web-classes:schedule-assignment' %}" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Clear</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-clock-history"></i> Course Schedules
+            <span class="badge bg-light text-dark ms-2">{{ section_courses|length }} entries</span>
+        </div>
+        <div class="card-body">
+            {% if section_courses %}
+                {% regroup section_courses by section as section_groups %}
+                {% for section_group in section_groups %}
+                    <div class="section-group">
+                        <div class="section-header">
+                            <i class="bi bi-collection"></i> {{ section_group.grouper.code }} 
+                            ({{ section_group.grouper.program.code }} Year {{ section_group.grouper.year_level.number }})
+                        </div>
+                        
+                        {% for sc in section_group.list %}
+                            <div class="course-row">
+                                <form method="post" class="row g-3 align-items-end">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="update_schedule">
+                                    <input type="hidden" name="section_course_id" value="{{ sc.id }}">
+                                    
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-muted">Course</label>
+                                        <div class="fw-bold">{{ sc.course.code }}</div>
+                                        <div class="small text-muted">{{ sc.course.title }}</div>
+                                    </div>
+                                    
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-muted">Term</label>
+                                        <div>{{ sc.term.term|slice:":1" }}S {{ sc.term.school_year }}</div>
+                                    </div>
+                                    
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-muted">Instructor</label>
+                                        <div>
+                                            {% if sc.instructor %}
+                                                <span class="badge badge-instructor">
+                                                    <i class="bi bi-person-check"></i> {{ sc.instructor.get_full_name }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-no-instructor">
+                                                    <i class="bi bi-person-x"></i> Not Assigned
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3">
+                                        <label class="form-label small" for="schedule_{{ sc.id }}">Schedule</label>
+                                        <input id="schedule_{{ sc.id }}" type="text" name="schedule" class="form-control form-control-sm schedule-input" 
+                                               value="{{ sc.schedule }}" placeholder="e.g., Mon/Wed 10:00-11:30">
+                                    </div>
+                                    
+                                    <div class="col-md-2">
+                                        <label class="form-label small" for="start_date_{{ sc.id }}">Start - End Date</label>
+                                        <div class="d-flex gap-1">
+                                            <input id="start_date_{{ sc.id }}" type="date" name="start_date" class="form-control form-control-sm" 
+                                                   value="{{ sc.start_date|date:'Y-m-d' }}">
+                                            <label class="form-label small visually-hidden" for="end_date_{{ sc.id }}">End Date</label>
+                                            <input id="end_date_{{ sc.id }}" type="date" name="end_date" class="form-control form-control-sm" 
+                                                   value="{{ sc.end_date|date:'Y-m-d' }}">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-1">
+                                        <button type="submit" class="btn btn-sm btn-primary btn-update w-100">
+                                            <i class="bi bi-check-lg"></i> Save
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="col-12">
+                                        <label class="form-label small" for="platform_url_{{ sc.id }}">Platform URL (Optional)</label>
+                                        <input id="platform_url_{{ sc.id }}" type="url" name="platform_url" class="form-control form-control-sm" 
+                                               value="{{ sc.platform_url }}" placeholder="https://...">
+                                    </div>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                    <p class="mt-3">No section courses found. Adjust your filters or create courses in the Academics page.</p>
+                    <a href="{% url 'web-users:admin-academics' %}" class="btn btn-primary">Go to Academics</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script>
+    // Preserve scroll position across page reloads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore scroll position if saved
+        const scrollPos = sessionStorage.getItem('scrollPos');
+        if (scrollPos) {
+            window.scrollTo(0, parseInt(scrollPos));
+            sessionStorage.removeItem('scrollPos');
+        }
+        
+        // Save scroll position before form submission
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function() {
+                sessionStorage.setItem('scrollPos', window.scrollY);
+            });
+        });
+    });
+
+    // Filter dependencies
+    const programSelect = document.getElementById('filterProgram');
+    const yearLevelSelect = document.getElementById('filterYearLevel');
+    const sectionSelect = document.getElementById('filterSection');
+    
+    function filterYearLevels() {
+        const selectedProgram = programSelect.value;
+        const yearOptions = yearLevelSelect.querySelectorAll('option');
+        
+        yearOptions.forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block';
+                return;
+            }
+            const optionProgram = option.getAttribute('data-program');
+            option.style.display = (!selectedProgram || optionProgram === selectedProgram) ? 'block' : 'none';
+        });
+    }
+    
+    function filterSections() {
+        const selectedProgram = programSelect.value;
+        const selectedYear = yearLevelSelect.value;
+        const sectionOptions = sectionSelect.querySelectorAll('option');
+        
+        sectionOptions.forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block';
+                return;
+            }
+            const optionProgram = option.getAttribute('data-program');
+            const optionYear = option.getAttribute('data-year');
+            
+            let show = true;
+            if (selectedProgram && optionProgram !== selectedProgram) show = false;
+            if (selectedYear && optionYear !== selectedYear) show = false;
+            
+            option.style.display = show ? 'block' : 'none';
+        });
+    }
+    
+    programSelect.addEventListener('change', () => {
+        filterYearLevels();
+        filterSections();
+    });
+    
+    yearLevelSelect.addEventListener('change', filterSections);
+    
+    // Initialize filters on page load
+    filterYearLevels();
+    filterSections();
+</script>
+</body>
+</html>

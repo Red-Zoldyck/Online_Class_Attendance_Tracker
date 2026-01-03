@@ -195,10 +195,10 @@ SIMPLE_JWT = {
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
 
-# Login URL
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'dashboard'
-LOGOUT_REDIRECT_URL = 'login'
+# Login URL (namespaced web routes)
+LOGIN_URL = 'web-users:login'
+LOGIN_REDIRECT_URL = 'web-users:dashboard'
+LOGOUT_REDIRECT_URL = 'web-users:login'
 
 # Session Configuration
 SESSION_COOKIE_SECURE = not DEBUG
@@ -208,10 +208,10 @@ SESSION_TIMEOUT = config('SESSION_TIMEOUT', default=1800, cast=int)
 
 # CSRF Configuration
 CSRF_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SAMESITE = 'Strict'
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token
+CSRF_COOKIE_SAMESITE = 'Lax'  # Changed from Strict to Lax for better compatibility
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', 
-                               default='http://localhost:8000', 
+                               default='http://localhost:8000,http://127.0.0.1:8000', 
                                cast=Csv())
 
 # Security Headers
@@ -285,13 +285,11 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Cache Configuration
+# Use local memory cache to avoid external Redis dependency during development
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'attendance-cache',
     }
 }
 

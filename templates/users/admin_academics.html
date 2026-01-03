@@ -1,0 +1,346 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Academics - Attendance Tracker</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        body { background-color: #f5f7fa; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .navbar-brand { font-weight: 700; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        .card-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+        .section-title { font-weight: 600; margin-bottom: 12px; color: #333; }
+        .table thead { background: #f0f2f8; }
+        .badge-term { background: #e0e7ff; color: #4338ca; }
+        .badge-pending { background: #fbbf24; color: #78350f; }
+        .badge-approved { background: #86efac; color: #14532d; }
+        .badge-rejected { background: #fca5a5; color: #7f1d1d; }
+        .floating-alerts {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 400px;
+        }
+        .floating-alerts .alert {
+            animation: slideIn 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}">🎓 Admin Academics</a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:dashboard' %}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-reports:dashboard' %}">Reports</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-students' %}">Students</a></li>
+                   <li class="nav-item"><a class="nav-link" href="{% url 'web-users:profile' %}">Profile</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:schedule-assignment' %}">Schedule Assignment</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:logout' %}">Logout</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+{% if messages %}
+<div class="floating-alerts">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="container py-4">
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="alert alert-info d-flex align-items-center mb-2" role="alert">
+                <div class="flex-grow-1">
+                    Review instructor applications and approve/decline without using Django admin.
+                </div>
+                <a class="btn btn-sm btn-primary ms-2" href="{% url 'web-users:admin-instructor-applications' %}">Open Applications</a>
+            </div>
+
+            <div class="alert alert-warning d-flex align-items-center" role="alert">
+                <div class="flex-grow-1">
+                    <strong>Sync Past Data:</strong> Create missing section-course combinations for existing courses/terms.
+                </div>
+                <form method="post" class="ms-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="sync_all">
+                    <button type="submit" class="btn btn-sm btn-warning">Sync All Data</button>
+                </form>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Add Term</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_term">
+                        <div class="mb-3">
+                            <label class="form-label">Program</label>
+                            <select name="program" id="termProgram" class="form-select" required>
+                                <option value="" disabled selected>Select program</option>
+                                {% for p in programs %}
+                                    <option value="{{ p.id }}">{{ p.code }} - {{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label">Term</label>
+                                <select name="term" class="form-select" required>
+                                    <option value="1">1st Sem</option>
+                                    <option value="2">2nd Sem</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">School Year</label>
+                                <input type="text" name="school_year" class="form-control" placeholder="2025-2026" required>
+                            </div>
+                        </div>
+                        <small class="text-muted d-block mt-2">Note: This term will be created for all year levels in the program.</small>
+                        <button class="btn btn-primary w-100 mt-3" type="submit">Add Term</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Add Course</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_course">
+                        <div class="mb-3">
+                            <label class="form-label">Program</label>
+                            <select name="program" id="courseProgram" class="form-select" required>
+                                <option value="" disabled selected>Select program</option>
+                                {% for p in programs %}
+                                    <option value="{{ p.id }}">{{ p.code }} - {{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-5">
+                                <label class="form-label">Course Code</label>
+                                <input type="text" name="code" class="form-control" placeholder="e.g., CS101" required>
+                            </div>
+                            <div class="col-7">
+                                <label class="form-label">Title</label>
+                                <input type="text" name="title" class="form-control" placeholder="Course title" required>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-4">
+                                <label class="form-label">Units</label>
+                                <input type="number" name="units" class="form-control" value="3" step="0.5" min="0">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label">Suggested Year</label>
+                                <select name="suggested_year_level" id="suggestedYearLevel" class="form-select" required>
+                                    <option value="" disabled selected>Select year level</option>
+                                    {% for y in year_levels %}
+                                        <option value="{{ y.id }}" data-program="{{ y.program.id }}">{{ y.program.code }} Y{{ y.number }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label">Suggested Term</label>
+                                <select name="suggested_term" class="form-select" required>
+                                    <option value="" disabled selected>Select term</option>
+                                    <option value="1">1st Sem</option>
+                                    <option value="2">2nd Sem</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="Optional description"></textarea>
+                        </div>
+                        <button class="btn btn-primary w-100 mt-3" type="submit">Add Course</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header">Open Subjects for Term (Bulk)</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="open_subjects_bulk">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Program</label>
+                                <select name="section_program" id="sectionProgram" class="form-select" required>
+                                    <option value="" disabled selected>Select program</option>
+                                    {% for p in programs %}
+                                        <option value="{{ p.id }}">{{ p.code }} - {{ p.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Term</label>
+                                <select name="section_term" class="form-select" required>
+                                    <option value="" disabled selected>Select term</option>
+                                    <option value="1">1st Sem</option>
+                                    <option value="2">2nd Sem</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label">School Year</label>
+                                <input type="text" name="section_school_year" class="form-control" placeholder="2025-2026" required>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <small class="text-muted">Creates terms for all year levels, then opens all matching courses and sections.</small>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary w-100 mt-3" type="submit">Open All Subjects</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Existing Terms & Open Subjects</div>
+                <div class="card-body">
+                    <div class="section-title">Terms</div>
+                    <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
+                        <table class="table table-sm align-middle mb-3">
+                            <thead><tr><th>Program</th><th>Year</th><th>Term</th><th>SY</th></tr></thead>
+                            <tbody>
+                                {% for t in terms %}
+                                    <tr>
+                                        <td>{{ t.program.code }}</td>
+                                        <td>Y{{ t.year_level.number }}</td>
+                                        <td><span class="badge badge-term">T{{ t.term }}</span></td>
+                                        <td>{{ t.school_year }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="4" class="text-muted">No terms yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="section-title">Open Subjects (Section Courses)</div>
+                    <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Course</th><th>Section</th><th>Term</th><th>Capacity</th><th>Schedule</th></tr></thead>
+                            <tbody>
+                                {% for s in section_courses %}
+                                    <tr>
+                                        <td>{{ s.course.code }}</td>
+                                        <td>{{ s.section.code }}</td>
+                                        <td>{{ s.term.program.code }} Y{{ s.term.year_level.number }} T{{ s.term.term }} {{ s.term.school_year }}</td>
+                                        <td>{{ s.capacity }}</td>
+                                        <td>{{ s.schedule }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="5" class="text-muted">No open subjects yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script>
+    // Preserve scroll position across page reloads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore scroll position if saved
+        const scrollPos = sessionStorage.getItem('scrollPos');
+        if (scrollPos) {
+            window.scrollTo(0, parseInt(scrollPos));
+            sessionStorage.removeItem('scrollPos');
+        }
+        
+        // Save scroll position before form submission
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function() {
+                sessionStorage.setItem('scrollPos', window.scrollY);
+            });
+        });
+    });
+
+    // Filter suggested year levels by selected program for course creation
+    (function() {
+        const programSelect = document.getElementById('courseProgram');
+        const yearSelect = document.getElementById('suggestedYearLevel');
+        if (!programSelect || !yearSelect) return;
+
+        const options = Array.from(yearSelect.options);
+
+        function filterYearLevels() {
+            const programId = programSelect.value;
+            options.forEach(opt => {
+                if (!opt.dataset.program) {
+                    opt.hidden = false;
+                    return;
+                }
+                opt.hidden = programId && opt.dataset.program !== programId;
+            });
+            // Reset selection if current option is hidden
+            if (yearSelect.selectedOptions.length && yearSelect.selectedOptions[0].hidden) {
+                yearSelect.value = '';
+            }
+        }
+
+        programSelect.addEventListener('change', filterYearLevels);
+        filterYearLevels();
+    })();
+
+    // Filter year levels for term creation by selected program
+    (function() {
+        const programSelect = document.getElementById('termProgram');
+        const yearSelect = document.getElementById('termYearLevel');
+        if (!programSelect || !yearSelect) return;
+
+        const options = Array.from(yearSelect.options);
+
+        function filterYearLevels() {
+            const programId = programSelect.value;
+            options.forEach(opt => {
+                if (!opt.dataset.program) {
+                    opt.hidden = false;
+                    return;
+                }
+                opt.hidden = programId && opt.dataset.program !== programId;
+            });
+            if (yearSelect.selectedOptions.length && yearSelect.selectedOptions[0].hidden) {
+                yearSelect.value = '';
+            }
+        }
+
+        programSelect.addEventListener('change', filterYearLevels);
+        filterYearLevels();
+    })();
+
+    // No additional filtering needed for bulk open
+</script>
+</body>
+</html>

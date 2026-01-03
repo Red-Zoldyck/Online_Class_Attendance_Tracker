@@ -1,0 +1,162 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Attendance</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #667eea;
+            --accent-2: #764ba2;
+            --border: #e2e8f0;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        .navbar { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .navbar-brand { font-weight: 800; letter-spacing: -0.02em; }
+        .page { max-width: 1100px; margin: 0 auto; padding: 28px 16px 40px; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+        h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.01em; }
+        .meta { color: var(--muted); }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        .badge { border-radius: 999px; padding: 6px 10px; font-weight: 700; font-size: 0.82rem; }
+        .badge.present, .badge.late { background: #dcfce7; color: var(--success); }
+        .badge.absent { background: #fee2e2; color: var(--danger); }
+        .badge.excused { background: #fef3c7; color: var(--warning); }
+        .badge.left_early { background: #e0f2fe; color: #0284c7; }
+        .list-group-item { border-color: var(--border); }
+        .section-pill { background: #f8fafc; color: var(--muted); border: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}">🎓 Attendance Tracker</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:dashboard' %}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:list' %}">Classes</a></li>
+                {% if user.role and user.role.name == 'student' %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-attendance:my-records' %}">My Attendance</a></li>
+                {% endif %}
+                {% if user.role and user.role.name == 'instructor' %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:instructor-apply' %}">Apply to Teach</a></li>
+                {% endif %}
+                {% if user.is_superuser or user.role and user.role.name == 'admin' %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-academics' %}">Admin Academics</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:schedule-assignment' %}">Schedule Assignment</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-instructor-applications' %}">Instructor Applications</a></li>
+                {% endif %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_full_name|default:user.email }}</a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="#">Profile</a></li>
+                        <li><a class="dropdown-item" href="{% url 'web-users:profile' %}">Profile</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'web-users:logout' %}">Logout</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="page">
+    <header>
+        <div>
+            <h1>Session {{ session.session_number }} Attendance</h1>
+            <div class="meta">{{ session.class_ref.code }} · {{ session.class_ref.name }} · {{ session.date|date:"M d, Y" }}</div>
+        </div>
+    </header>
+
+    <div class="row g-3">
+        <div class="col-md-5">
+            <div class="card p-3 h-100">
+                <h6 class="text-uppercase text-muted mb-2">Session Details</h6>
+                <p class="mb-1"><strong>Topic:</strong> {{ session.topic }}</p>
+                <p class="mb-1"><strong>Time:</strong> {{ session.start_time }} - {{ session.end_time }}</p>
+                <p class="mb-1"><strong>Class:</strong> {{ session.class_ref.code }} - {{ session.class_ref.name }}</p>
+                <p class="mb-0 text-muted small">Session ID: {{ session.id }}</p>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card p-3 h-100">
+                <h6 class="text-uppercase text-muted mb-2">Enrolled Students</h6>
+                {% if students %}
+                <ul class="list-group list-group-flush">
+                    {% for enrollment in students %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div class="d-flex flex-column">
+                            <span>{{ enrollment.student.get_full_name|default:enrollment.student.email }}</span>
+                            <span class="text-muted small">{{ enrollment.student.email }}</span>
+                        </div>
+                        {% if enrollment.section_program %}
+                        <span class="badge section-pill">{{ enrollment.section_program }}{% if enrollment.section_year %} Y{{ enrollment.section_year }}{% endif %} {{ enrollment.section_code }}</span>
+                        {% else %}
+                        <span class="text-muted small">Section: Unassigned</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-muted">No enrolled students found.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+        <h6 class="text-uppercase text-muted mb-3">Recorded Attendance</h6>
+        {% if attendance_records %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Student</th>
+                        <th scope="col">Section</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Notes</th>
+                        <th scope="col">Marked By</th>
+                        <th scope="col">Marked At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in attendance_records %}
+                    <tr>
+                        <td>{{ record.student.get_full_name|default:record.student.email }}</td>
+                        <td>
+                            {% if record.section_program %}
+                            <span class="badge section-pill">{{ record.section_program }}{% if record.section_year %} Y{{ record.section_year }}{% endif %} {{ record.section_code }}</span>
+                            {% else %}
+                            <span class="text-muted small">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge {{ record.status }}">{{ record.get_status_display }}</span></td>
+                        <td class="text-muted">{{ record.notes|default:'—' }}</td>
+                        <td class="text-muted">{{ record.marked_by.get_full_name|default:record.marked_by }}</td>
+                        <td class="text-muted">{{ record.marked_at|date:"M d, Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-muted">No attendance records have been marked for this session yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

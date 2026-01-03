@@ -53,7 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name',
-            'phone_number', 'role', 'role_id', 'is_verified',
+            'phone_number', 'student_number', 'role', 'role_id', 'is_verified',
             'is_active', 'last_login', 'created_at', 'profile'
         ]
         read_only_fields = [
@@ -82,7 +82,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name',
             'full_name', 'phone_number', 'role', 'role_id',
-            'is_verified', 'is_active', 'profile_picture',
+            'student_number', 'is_verified', 'is_active', 'profile_picture',
             'last_login', 'created_at', 'updated_at', 'profile'
         ]
         read_only_fields = [
@@ -100,6 +100,30 @@ class UserDetailSerializer(serializers.ModelSerializer):
         instance.save()
         logger.info(f"User updated: {instance.email}")
         return instance
+
+
+class SelfProfileSerializer(serializers.ModelSerializer):
+    """Serializer for self-service profile updates with protected identifiers."""
+
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'email', 'phone_number', 'profile_picture'
+        ]
+        read_only_fields = []
+
+    def validate(self, attrs):
+        user: User = self.instance  # type: ignore
+        role_name = getattr(getattr(user, 'role', None), 'name', None)
+
+        # Students must not change email to another student's number? Keep email change allowed but student_number blocked elsewhere.
+        if role_name == Role.RoleChoices.STUDENT:
+            # explicit guard: student_number is immutable via serializer by omission
+            pass
+        if role_name == Role.RoleChoices.INSTRUCTOR:
+            # instructor id (if stored in username/student_number) is also protected by omission
+            pass
+        return attrs
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -124,12 +148,28 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         queryset=Role.objects.filter(is_active=True),
         help_text="User's role in the system"
     )
+    student_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="For students: format 04141-YY-XXXX"
+    )
+    teacher_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="For instructors: school-issued teacher ID"
+    )
+    admin_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Admin creation code"
+    )
     
     class Meta:
         model = User
         fields = [
             'email', 'username', 'first_name', 'last_name',
-            'password', 'password_confirm', 'phone_number', 'role'
+            'password', 'password_confirm', 'phone_number', 'role',
+            'student_number', 'teacher_id', 'admin_code'
         ]
     
     def validate_email(self, value):
@@ -153,18 +193,40 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
-        """Validate that passwords match."""
+        """Validate that passwords match and role-specific codes are provided."""
         if data.get('password') != data.get('password_confirm'):
             raise serializers.ValidationError({'password': "Passwords do not match."})
+
+        role = data.get('role')
+        if role:
+            role_name = role.name
+            if role_name == Role.RoleChoices.STUDENT:
+                sn = (data.get('student_number') or '').strip()
+                import re
+                if not sn or not re.fullmatch(r"04141-\d{2}-\d{4}", sn):
+                    raise serializers.ValidationError({'student_number': "Student number must match 04141-YY-XXXX."})
+            elif role_name == Role.RoleChoices.INSTRUCTOR:
+                tid = (data.get('teacher_id') or '').strip()
+                if not tid:
+                    raise serializers.ValidationError({'teacher_id': "Teacher ID is required for instructors."})
+            elif role_name == Role.RoleChoices.ADMIN:
+                code = (data.get('admin_code') or '').strip()
+                if code != "@dm|n@2o2G!":
+                    raise serializers.ValidationError({'admin_code': "Invalid admin code."})
         return data
     
     def create(self, validated_data):
         """Create a new user with validated data."""
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
-        user = User.objects.create_user(**validated_data)
-        user.set_password(password)
-        user.save()
+        student_number = validated_data.pop('student_number', None)
+        validated_data.pop('teacher_id', None)
+        validated_data.pop('admin_code', None)
+
+        user = User.objects.create_user(password=password, **validated_data)
+        if student_number:
+            user.student_number = student_number
+            user.save(update_fields=['student_number'])
         logger.info(f"New user registered: {user.email}")
         return user
 

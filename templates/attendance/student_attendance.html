@@ -1,0 +1,173 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Attendance</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #667eea;
+            --accent-2: #764ba2;
+            --border: #e2e8f0;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        .navbar { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .navbar-brand { font-weight: 800; letter-spacing: -0.02em; }
+        .page { max-width: 1100px; margin: 0 auto; padding: 28px 16px 40px; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+        h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.01em; }
+        .meta { color: var(--muted); }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        .stat .label { color: var(--muted); font-size: 0.9rem; }
+        .stat .value { font-weight: 800; font-size: 1.4rem; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        table { width: 100%; }
+        th { color: var(--muted); font-weight: 700; font-size: 0.9rem; }
+        td { vertical-align: middle; font-size: 0.95rem; }
+        .badge { border-radius: 999px; padding: 6px 10px; font-weight: 700; font-size: 0.82rem; }
+        .badge.present, .badge.late { background: #dcfce7; color: var(--success); }
+        .badge.absent { background: #fee2e2; color: var(--danger); }
+        .badge.excused { background: #fef3c7; color: var(--warning); }
+        .pagination { margin: 16px 0 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .pagination a, .pagination span { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--text); background: var(--card); }
+        .pagination .current { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .empty { padding: 18px; color: var(--muted); text-align: center; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}">🎓 Attendance Tracker</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:dashboard' %}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:list' %}">Classes</a></li>
+                {% if user.role and user.role.name == 'student' %}
+                <li class="nav-item"><a class="nav-link active" aria-current="page" href="{% url 'web-attendance:my-records' %}">My Attendance</a></li>
+                {% endif %}
+                {% if user.role and user.role.name == 'instructor' %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:instructor-apply' %}">Apply to Teach</a></li>
+                {% endif %}
+                {% if user.is_superuser or user.role and user.role.name == 'admin' %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-academics' %}">Admin Academics</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:schedule-assignment' %}">Schedule Assignment</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:admin-instructor-applications' %}">Instructor Applications</a></li>
+                {% endif %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_full_name|default:user.email }}</a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="#">Profile</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'web-users:logout' %}">Logout</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="page">
+    <header>
+        <div>
+            <h1>My Attendance</h1>
+            <div class="meta">Track your attendance across all sessions.</div>
+        </div>
+    </header>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="label">Total Sessions</div>
+            <div class="value">{{ total_sessions|default:0 }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">Present / Late</div>
+            <div class="value">{{ present_count|default:0 }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">Absent</div>
+            <div class="value">{{ absent_count|default:0 }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">Excused</div>
+            <div class="value">{{ excused_count|default:0 }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">Attendance Rate</div>
+            <div class="value">{{ attendance_rate|default:0 }}%</div>
+        </div>
+    </div>
+
+    <div class="card p-3">
+        {% if records %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Class</th>
+                        <th scope="col">Session</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td>{{ record.session.date|date:"M d, Y" }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ record.session.class_ref.code }}</div>
+                            <div class="text-muted small">{{ record.session.class_ref.name }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-semibold">Session {{ record.session.session_number }}</div>
+                            <div class="text-muted small">{{ record.session.start_time }} - {{ record.session.end_time }}</div>
+                        </td>
+                        <td>
+                            <span class="badge {{ record.status }}">{{ record.get_status_display }}</span>
+                        </td>
+                        <td class="text-muted">{{ record.notes|default:'—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if is_paginated %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            {% else %}
+                <span>Previous</span>
+            {% endif %}
+
+            <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">Next</a>
+            {% else %}
+                <span>Next</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="empty">No attendance records yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

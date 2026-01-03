@@ -46,6 +46,7 @@ urlpatterns = [
     path('', include('apps.users.urls_web', namespace='web-users')),
     path('classes/', include('apps.classes.urls_web', namespace='web-classes')),
     path('attendance/', include('apps.attendance.urls_web', namespace='web-attendance')),
+    path('reports/', include('apps.reports.urls_web', namespace='web-reports')),
 ]
 
 # Serve media files in development

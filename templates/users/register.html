@@ -1,0 +1,222 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Attendance Tracker</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .register-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            padding: 32px;
+            width: 100%;
+            max-width: 520px;
+        }
+        .register-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .register-header h1 {
+            color: #333;
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .register-header p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #6a3f8a 100%);
+        }
+        .error-message, .success-message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .error-message { background: #f8d7da; color: #842029; }
+        .success-message { background: #d1e7dd; color: #0f5132; }
+    </style>
+</head>
+<body>
+<div class="register-container">
+    <div class="register-header">
+        <h1>🎓 Create an Account</h1>
+        <p>Register to manage attendance</p>
+    </div>
+
+    <div id="alert" class="d-none"></div>
+
+    <form id="register-form">
+        {% csrf_token %}
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label">Role</label>
+                <select name="role" id="role-select" class="form-select" required>
+                    <option value="" selected disabled>Select role</option>
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" data-role-name="{{ role.name }}">{{ role.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 d-none" id="student-number-group" hidden>
+                <label class="form-label">Student Number (format 04141-YY-XXXX)</label>
+                <input type="text" name="student_number" class="form-control" placeholder="04141-25-1234">
+            </div>
+            <div class="col-12 d-none" id="teacher-id-group" hidden>
+                <label class="form-label">Teacher ID</label>
+                <input type="text" name="teacher_id" class="form-control" placeholder="Enter teacher ID">
+            </div>
+            <div class="col-12 d-none" id="admin-code-group" hidden>
+                <label class="form-label">Admin Code</label>
+                <input type="password" name="admin_code" class="form-control" placeholder="Enter admin code">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">First name</label>
+                <input type="text" name="first_name" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Last name</label>
+                <input type="text" name="last_name" class="form-control" required>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-control" required>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Username</label>
+                <input type="text" name="username" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" name="password_confirm" class="form-control" required>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Phone (optional)</label>
+                <input type="text" name="phone_number" class="form-control">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 mt-3">Create Account</button>
+    </form>
+
+    <div class="text-center mt-3">
+        Already have an account? <a href="{% url 'web-users:login' %}">Sign in</a>
+    </div>
+</div>
+
+<script>
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+const form = document.getElementById('register-form');
+const alertBox = document.getElementById('alert');
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    alertBox.classList.add('d-none');
+
+    const data = Object.fromEntries(new FormData(form));
+    // Remove empty role-specific fields to keep payload tidy
+    if (!data.student_number) delete data.student_number;
+    if (!data.teacher_id) delete data.teacher_id;
+    if (!data.admin_code) delete data.admin_code;
+    try {
+        const resp = await fetch('/api/v1/auth/register/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify(data)
+        });
+
+        let json = null;
+        try { json = await resp.json(); } catch (e) { json = null; }
+
+        const pickError = (payload) => {
+            if (!payload) return 'Registration failed.';
+            if (payload.message) return payload.message;
+            if (Array.isArray(payload)) return payload.join(' ');
+            if (typeof payload === 'object') {
+                const parts = Object.values(payload).flat().map(String);
+                if (parts.length) return parts.join(' ');
+            }
+            return 'Registration failed.';
+        };
+
+        if (!resp.ok) {
+            const msg = pickError(json);
+            alertBox.className = 'error-message';
+            alertBox.textContent = msg;
+            return;
+        }
+        alertBox.className = 'success-message';
+        alertBox.textContent = 'Account created. Redirecting to login...';
+        setTimeout(() => { window.location.href = '{% url "web-users:login" %}'; }, 1200);
+    } catch (err) {
+        alertBox.className = 'error-message';
+        alertBox.textContent = 'Unexpected error. Please try again.';
+    } finally {
+        alertBox.classList.remove('d-none');
+    }
+});
+
+const roleSelect = document.getElementById('role-select');
+const studentGroup = document.getElementById('student-number-group');
+const teacherGroup = document.getElementById('teacher-id-group');
+const adminGroup = document.getElementById('admin-code-group');
+
+const studentInput = studentGroup.querySelector('input');
+const teacherInput = teacherGroup.querySelector('input');
+const adminInput = adminGroup.querySelector('input');
+
+function toggleRoleFields() {
+    const selected = roleSelect.options[roleSelect.selectedIndex];
+    const roleName = selected ? selected.getAttribute('data-role-name') : '';
+    const groups = [
+        {group: studentGroup, input: studentInput, match: 'student'},
+        {group: teacherGroup, input: teacherInput, match: 'instructor'},
+        {group: adminGroup, input: adminInput, match: 'admin'},
+    ];
+
+    groups.forEach(({group, input, match}) => {
+        const show = roleName === match;
+        group.classList.toggle('d-none', !show);
+        group.hidden = !show;
+        input.required = show;
+        input.disabled = !show;
+        if (!show) input.value = '';
+    });
+}
+
+roleSelect.addEventListener('change', toggleRoleFields);
+// Initialize on load in case browser remembers selection
+toggleRoleFields();
+</script>
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

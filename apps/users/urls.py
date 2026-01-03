@@ -20,6 +20,7 @@ urlpatterns = [
     path('auth/login/', views.UserLoginView.as_view(), name='api-login'),
     path('auth/logout/', views.UserLogoutView.as_view(), name='api-logout'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('me/', views.SelfProfileView.as_view(), name='me'),
     
     # Router URLs
     path('', include(router.urls)),

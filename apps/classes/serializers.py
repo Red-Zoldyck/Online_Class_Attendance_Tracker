@@ -9,7 +9,7 @@ Serializers:
 """
 
 from rest_framework import serializers
-from apps.classes.models import Class, Session, StudentEnrollment
+from apps.classes.models import Class, Session, StudentEnrollment, InstructorApplication
 from apps.users.serializers import UserSerializer
 from apps.users.models import User
 from datetime import datetime, timedelta
@@ -118,7 +118,36 @@ class ClassDetailSerializer(serializers.ModelSerializer):
         return StudentEnrollmentSerializer(enrollments, many=True).data
 
 
+class InstructorApplicationSerializer(serializers.ModelSerializer):
+    """Serializer for instructor applications."""
+
+    instructor = UserSerializer(read_only=True)
+    instructor_id = serializers.PrimaryKeyRelatedField(
+        write_only=True,
+        source='instructor',
+        queryset=User.objects.all(),
+        required=True
+    )
+
+    class Meta:
+        model = InstructorApplication
+        fields = [
+            'id', 'class_ref', 'instructor', 'instructor_id', 'status', 'note',
+            'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'status', 'note', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at']
+
+
 def from_users_import(User):
     """Import User model to avoid circular imports."""
     from apps.users.models import User
     return User
+
+
+class QuickEnrollRequestSerializer(serializers.Serializer):
+    """Minimal payload for instructor-led enrollment/creation of a student."""
+
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    phone_number = serializers.CharField(max_length=50, required=False, allow_blank=True)

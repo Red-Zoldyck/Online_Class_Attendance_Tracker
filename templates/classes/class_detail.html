@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Detail</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+        a { color: #1d3fbf; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        h1 { margin-top: 0; font-size: 1.6rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px 16px; background: #fff; }
+        .label { color: #555; font-size: 0.9rem; }
+        .value { font-weight: 600; margin-top: 4px; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 0.78rem; background: #eef2ff; color: #1d3fbf; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #f4f6f8; font-weight: 600; }
+        h2 { margin-top: 28px; margin-bottom: 8px; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+    <p><a href="{% url 'web-classes:list' %}">&#8592; Back to classes</a></p>
+
+    <h1>{{ class.name }} ({{ class.code }})</h1>
+    <div class="badge">{% if class.is_active %}Active{% else %}Inactive{% endif %}</div>
+
+    <div class="grid">
+        <div class="card">
+            <div class="label">Instructor</div>
+            <div class="value">{{ class.instructor.get_full_name|default:class.instructor.email }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Schedule</div>
+            <div class="value">{{ class.schedule }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Dates</div>
+            <div class="value">{{ class.start_date }} &ndash; {{ class.end_date }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Enrollment</div>
+            <div class="value">{{ class.enrolled_count }} / {{ class.capacity }} ({{ class.available_slots }} open)</div>
+        </div>
+        {% if class.platform_url %}
+        <div class="card">
+            <div class="label">Platform Link</div>
+            <div class="value"><a href="{{ class.platform_url }}" target="_blank" rel="noopener">Join</a></div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if class.description %}
+    <h2>Description</h2>
+    <p>{{ class.description }}</p>
+    {% endif %}
+
+    <h2>Sessions</h2>
+    {% if sessions %}
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Date</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Topic</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td>{{ session.session_number }}</td>
+                <td>{{ session.date }}</td>
+                <td>{{ session.start_time }}</td>
+                <td>{{ session.end_time }}</td>
+                <td>{{ session.topic }}</td>
+                <td>{% if session.is_held %}Held{% else %}Canceled{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No sessions scheduled.</p>
+    {% endif %}
+
+    <h2>Enrollments</h2>
+    {% if enrollments %}
+    <table>
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Email</th>
+                <th>Enrolled On</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for enrollment in enrollments %}
+            <tr>
+                <td>{{ enrollment.student.get_full_name|default:enrollment.student.email }}</td>
+                <td>{{ enrollment.student.email }}</td>
+                <td>{{ enrollment.enrollment_date }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No active enrollments.</p>
+    {% endif %}
+</body>
+</html>

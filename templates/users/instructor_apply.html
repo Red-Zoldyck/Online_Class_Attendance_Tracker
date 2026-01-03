@@ -1,0 +1,354 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apply to Teach - Attendance Tracker</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+        }
+        body { background-color: #f5f7fa; }
+        .navbar { background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); }
+        .navbar-brand { font-weight: 700; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .card-header { background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); color: #fff; }
+        .table thead { background: #f0f2f8; }
+        .badge-pending { background: #fbbf24; color: #78350f; }
+        .badge-approved { background: #86efac; color: #14532d; }
+        .badge-rejected { background: #fca5a5; color: #7f1d1d; }
+        .conflict-warning { background: #fef3c7; padding: 8px; border-left: 3px solid #f59e0b; margin-bottom: 10px; }
+        .checkbox-cell { width: 40px; text-align: center; }
+        .instructor-assigned { background: #fee2e2; }
+        .step-indicator { font-size: 14px; color: #666; margin-bottom: 15px; }
+        .course-section-group { margin-bottom: 30px; }
+        .floating-alerts {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 400px;
+        }
+        .floating-alerts .alert {
+            animation: slideIn 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}">🎓 Apply to Teach</a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:dashboard' %}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:logout' %}">Logout</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+{% if messages %}
+<div class="floating-alerts">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="container py-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Step 1: Apply for Courses -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Step 1: Apply for Courses</h5>
+                </div>
+                <div class="card-body">
+                    <p class="step-indicator">Select courses you want to teach. After admin approval, you can choose specific sections.</p>
+                    
+                    {% if available_courses %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="apply_course">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Application Note (Optional)</label>
+                            <textarea name="note" class="form-control" rows="2" placeholder="Add a message..."></textarea>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th class="checkbox-cell">Select</th>
+                                        <th>Program</th>
+                                        <th>Course Code</th>
+                                        <th>Course Title</th>
+                                        <th>Units</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for course in available_courses %}
+                                        <tr>
+                                            <td class="checkbox-cell">
+                                                <input type="checkbox" name="courses" value="{{ course.id }}" class="course-checkbox">
+                                            </td>
+                                            <td>{{ course.program.code }}</td>
+                                            <td>{{ course.code }}</td>
+                                            <td>{{ course.title }}</td>
+                                            <td>{{ course.units }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mt-3">Submit Course Application</button>
+                    </form>
+                    {% else %}
+                        <p class="text-muted">No courses available to apply for.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Step 2: Select Sections (for approved courses) -->
+            {% if sections_by_course %}
+                {% for course_id, data in sections_by_course.items %}
+                <div class="card course-section-group">
+                    <div class="card-header">
+                        <h5 class="mb-0">Step 2: {{ data.course.code }} - {{ data.course.title }}</h5>
+                        <small>Select sections to teach (course application approved)</small>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="apply_sections">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Note for Section Applications (Optional)</label>
+                                <textarea name="section_note" class="form-control" rows="2"></textarea>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th class="checkbox-cell">Select</th>
+                                            <th>Section</th>
+                                            <th>Term</th>
+                                            <th>Schedule</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for section in data.sections %}
+                                            {% if section.application %}
+                                                <tr class="table-secondary">
+                                                    <td class="checkbox-cell">
+                                                        <input type="checkbox" disabled>
+                                                    </td>
+                                                    <td>{{ section.section.code }}</td>
+                                                    <td>{{ section.term.program.code }} Y{{ section.term.year_level.number }} T{{ section.term.term }} {{ section.term.school_year }}</td>
+                                                    <td>{{ section.schedule|default:"TBA" }}</td>
+                                                    <td>
+                                                        <span class="badge badge-{{ section.application.status }}">{{ section.application.status|upper }}</span>
+                                                    </td>
+                                                </tr>
+                                            {% elif section.has_instructor %}
+                                                <tr class="instructor-assigned">
+                                                    <td class="checkbox-cell">
+                                                        <input type="checkbox" disabled>
+                                                    </td>
+                                                    <td>{{ section.section.code }}</td>
+                                                    <td>{{ section.term.program.code }} Y{{ section.term.year_level.number }} T{{ section.term.term }} {{ section.term.school_year }}</td>
+                                                    <td>{{ section.schedule|default:"TBA" }}</td>
+                                                    <td>
+                                                        <small class="text-muted">Assigned to {{ section.instructor.get_full_name }}</small>
+                                                    </td>
+                                                </tr>
+                                            {% else %}
+                                                <tr>
+                                                    <td class="checkbox-cell">
+                                                        <input type="checkbox" name="section_courses" value="{{ section.id }}" data-schedule="{{ section.schedule }}" class="section-checkbox">
+                                                    </td>
+                                                    <td>{{ section.section.code }}</td>
+                                                    <td>{{ section.term.program.code }} Y{{ section.term.year_level.number }} T{{ section.term.term }} {{ section.term.school_year }}</td>
+                                                    <td>{{ section.schedule|default:"TBA" }}</td>
+                                                    <td><small class="text-success">✓ Available</small></td>
+                                                </tr>
+                                            {% endif %}
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted">No sections available for this course.</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div id="conflictWarning-{{ course_id }}" class="conflict-warning" style="display:none;">
+                                <strong>⚠️ Schedule Conflict:</strong> <span class="conflict-msg"></span>
+                            </div>
+
+                            <button type="submit" class="btn btn-success w-100 mt-3 submit-sections-btn" data-course="{{ course_id }}">
+                                Apply for Selected Sections
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📋 My Course Applications</h5>
+                </div>
+                <div class="card-body">
+                    {% if course_applications %}
+                        <div class="list-group">
+                            {% for app in course_applications %}
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">{{ app.course.code }}</h6>
+                                            <small class="text-muted">{{ app.course.title }}</small>
+                                            <div class="mt-1">
+                                                <span class="badge badge-{{ app.status }}">{{ app.status|upper }}</span>
+                                            </div>
+                                            {% if app.note %}
+                                                <small class="d-block mt-1 text-muted">Note: {{ app.note }}</small>
+                                            {% endif %}
+                                        </div>
+                                        {% if app.status == 'pending' %}
+                                            <form method="post" class="ms-2" onsubmit="return confirm('Withdraw this application?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="withdraw_course">
+                                                <input type="hidden" name="application_id" value="{{ app.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">Withdraw</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No course applications yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">ℹ️ How It Works</h5>
+                </div>
+                <div class="card-body">
+                    <ol class="small">
+                        <li><strong>Step 1:</strong> Apply for courses you want to teach.</li>
+                        <li>Wait for admin to approve your course applications.</li>
+                        <li><strong>Step 2:</strong> After approval, select specific sections for each approved course.</li>
+                        <li>System checks for schedule conflicts automatically.</li>
+                        <li>Admin reviews your section selections and assigns you.</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script>
+    // Preserve scroll position across page reloads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore scroll position if saved
+        const scrollPos = sessionStorage.getItem('scrollPos');
+        if (scrollPos) {
+            window.scrollTo(0, parseInt(scrollPos));
+            sessionStorage.removeItem('scrollPos');
+        }
+        
+        // Save scroll position before form submission
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function() {
+                sessionStorage.setItem('scrollPos', window.scrollY);
+            });
+        });
+    });
+
+    // Schedule conflict detection for section selection
+    document.querySelectorAll('form').forEach(form => {
+        const checkboxes = form.querySelectorAll('.section-checkbox');
+        if (checkboxes.length === 0) return;
+        
+        const submitBtn = form.querySelector('.submit-sections-btn');
+        const courseId = submitBtn ? submitBtn.dataset.course : null;
+        const warning = document.getElementById(`conflictWarning-${courseId}`);
+        const message = warning ? warning.querySelector('.conflict-msg') : null;
+
+        function extractDays(schedule) {
+            if (!schedule) return [];
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            return days.filter(day => schedule.includes(day));
+        }
+
+        function schedulesOverlap(sched1, sched2) {
+            const days1 = extractDays(sched1);
+            const days2 = extractDays(sched2);
+            return days1.some(day => days2.includes(day));
+        }
+
+        function checkConflicts() {
+            if (!warning || !submitBtn) return;
+            
+            const selected = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => ({ id: cb.value, schedule: cb.dataset.schedule }));
+
+            if (selected.length < 2) {
+                warning.style.display = 'none';
+                submitBtn.disabled = false;
+                return;
+            }
+
+            for (let i = 0; i < selected.length; i++) {
+                for (let j = i + 1; j < selected.length; j++) {
+                    if (schedulesOverlap(selected[i].schedule, selected[j].schedule)) {
+                        warning.style.display = 'block';
+                        message.textContent = `"${selected[i].schedule}" conflicts with "${selected[j].schedule}"`;
+                        submitBtn.disabled = true;
+                        return;
+                    }
+                }
+            }
+
+            warning.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', checkConflicts);
+        });
+
+        checkConflicts();
+    });
+</script>
+</body>
+</html>

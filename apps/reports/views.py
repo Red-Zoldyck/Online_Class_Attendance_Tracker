@@ -17,7 +17,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.reports.services import (
     AttendanceReportService, ClassReportService
 )
-from apps.classes.models import Class
+from apps.classes.models import Class, SectionCourse
+from apps.attendance.models import AttendanceRecord
 from apps.users.permissions import IsAdmin
 from apps.classes.permissions import IsInstructorOrAdmin
 import csv
@@ -323,4 +324,116 @@ class ClassReportView(LoginRequiredMixin, TemplateView):
         except Class.DoesNotExist:
             context['error'] = 'Class not found.'
         
+        return context
+
+
+class ReportDashboardView(LoginRequiredMixin, TemplateView):
+    """Web dashboard to view attendance reports grouped by section/course."""
+
+    template_name = 'reports/attendance_dashboard.html'
+    login_url = 'web-users:login'
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(user, 'role', None)
+
+        if user.is_superuser or (role and role.name == 'admin'):
+            return SectionCourse.objects.select_related('section__program', 'section__year_level', 'course', 'term', 'instructor').filter(is_active=True)
+        if role and role.name == 'instructor':
+            return SectionCourse.objects.select_related('section__program', 'section__year_level', 'course', 'term', 'instructor').filter(instructor=user, is_active=True)
+        if role and role.name == 'student':
+            return SectionCourse.objects.select_related('section__program', 'section__year_level', 'course', 'term', 'instructor').filter(enrollments__student=user, enrollments__is_active=True, is_active=True).distinct()
+        return SectionCourse.objects.none()
+
+    def _compute_stats(self, sc, start_date=None, end_date=None):
+        class_code = f"ATT-SC-{sc.id}"  # shadow class code used for section-course attendance
+        qs = AttendanceRecord.objects.filter(session__class_ref__code=class_code)
+        if start_date:
+            qs = qs.filter(session__date__gte=start_date)
+        if end_date:
+            qs = qs.filter(session__date__lte=end_date)
+
+        total = qs.count()
+        present = qs.filter(status__in=['present', 'late']).count()
+        absent = qs.filter(status='absent').count()
+        excused = qs.filter(status='excused').count()
+        late = qs.filter(status='late').count()
+
+        rate = (present / total * 100) if total else 0
+        return {
+            'total': total,
+            'present': present,
+            'absent': absent,
+            'excused': excused,
+            'late': late,
+            'attendance_rate': round(rate, 2),
+        }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        start_date = self.request.GET.get('start_date') or None
+        end_date = self.request.GET.get('end_date') or None
+        section_course_id = self.request.GET.get('section_course')
+
+        section_courses = self.get_queryset().order_by(
+            'section__program__code', 'section__year_level__number', 'section__code', 'course__code'
+        )
+
+        # If a specific section-course is selected, show detailed records
+        if section_course_id:
+            try:
+                sc = section_courses.get(id=section_course_id)
+                class_code = f"ATT-SC-{sc.id}"
+                records_qs = AttendanceRecord.objects.filter(
+                    session__class_ref__code=class_code
+                ).select_related('student', 'session')
+                
+                if start_date:
+                    records_qs = records_qs.filter(session__date__gte=start_date)
+                if end_date:
+                    records_qs = records_qs.filter(session__date__lte=end_date)
+                
+                records_qs = records_qs.order_by('session__date', 'student__last_name', 'student__first_name')
+                
+                # Format status codes
+                detailed_records = []
+                for rec in records_qs:
+                    status_map = {
+                        'present': 'P',
+                        'absent': 'A',
+                        'late': 'L',
+                        'excused': 'E',
+                    }
+                    detailed_records.append({
+                        'student_name': rec.student.get_full_name() or rec.student.email,
+                        'student_number': rec.student.student_number or '—',
+                        'date': rec.session.date,
+                        'status_code': status_map.get(rec.status, rec.status.upper()),
+                        'status': rec.status,
+                    })
+                
+                context['selected_section_course'] = sc
+                context['detailed_records'] = detailed_records
+                context['show_details'] = True
+            except SectionCourse.DoesNotExist:
+                pass
+        
+        # Always show summary for selection
+        report_rows = []
+        for sc in section_courses:
+            stats = self._compute_stats(sc, start_date, end_date)
+            report_rows.append({
+                'section_course': sc,
+                'section': sc.section,
+                'course': sc.course,
+                'term': sc.term,
+                'instructor': sc.instructor,
+                'schedule': sc.schedule,
+                'stats': stats,
+            })
+
+        context['report_rows'] = report_rows
+        context['start_date'] = start_date
+        context['end_date'] = end_date
+        context['section_course_id'] = section_course_id
         return context

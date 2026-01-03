@@ -1,0 +1,193 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Reports</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #4f46e5;
+            --border: #e2e8f0;
+            --success: #16a34a;
+            --danger: #dc2626;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .navbar-brand { font-weight: 800; letter-spacing: -0.02em; }
+        .page { max-width: 1200px; margin: 0 auto; padding: 28px 16px 40px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05); }
+        .badge { border-radius: 999px; padding: 6px 10px; font-weight: 700; font-size: 0.82rem; }
+        .badge.present { background: #dcfce7; color: var(--success); }
+        .badge.absent { background: #fee2e2; color: var(--danger); }
+        .badge.excused { background: #fef3c7; color: #b45309; }
+        .badge.late { background: #fef3c7; color: #b45309; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+        .stat { display: flex; justify-content: space-between; gap: 8px; }
+        .muted { color: var(--muted); font-size: 0.9rem; }
+        .table-sm td, .table-sm th { padding: 8px 10px; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; }
+            .navbar { display: none; }
+            .card { box-shadow: none; border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'web-users:dashboard' %}">🎓 Attendance Tracker</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-users:dashboard' %}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'web-classes:list' %}">Classes</a></li>
+                <li class="nav-item"><a class="nav-link active" aria-current="page" href="{% url 'web-reports:dashboard' %}">Reports</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_full_name|default:user.email }}</a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="{% url 'web-users:profile' %}">Profile</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'web-users:logout' %}">Logout</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="page">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 no-print">
+        <div>
+            <h1 class="h4 mb-1">Attendance Reports</h1>
+            <div class="muted">Organized by section and subject.</div>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-primary btn-sm">🖨️ Print Report</button>
+        </div>
+    </div>
+
+    <div class="card p-3 mb-3 no-print">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" for="section_course">Class/Subject</label>
+                <select id="section_course" name="section_course" class="form-select form-select-sm">
+                    <option value="">All Classes (Summary)</option>
+                    {% for row in report_rows %}
+                        <option value="{{ row.section_course.id }}" {% if section_course_id == row.section_course.id|stringformat:'s' %}selected{% endif %}>
+                            {{ row.course.code }} - {{ row.section.program.code }} Y{{ row.section.year_level.number }} {{ row.section.code }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="start_date">Start date</label>
+                <input type="date" class="form-control form-control-sm" id="start_date" name="start_date" value="{{ start_date|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="end_date">End date</label>
+                <input type="date" class="form-control form-control-sm" id="end_date" name="end_date" value="{{ end_date|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary btn-sm w-100" type="submit">Generate Report</button>
+            </div>
+        </form>
+    </div>
+
+    {% if show_details and detailed_records %}
+    <div class="card p-3 mb-3">
+        <h5 class="mb-2">{{ selected_section_course.course.code }} — {{ selected_section_course.course.title }}</h5>
+        <div class="muted mb-3">
+            Section: {{ selected_section_course.section.program.code }} Y{{ selected_section_course.section.year_level.number }} {{ selected_section_course.section.code }} · 
+            Term: {{ selected_section_course.term }} · 
+            Instructor: {% if selected_section_course.instructor %}{{ selected_section_course.instructor.get_full_name }}{% else %}Unassigned{% endif %}
+        </div>
+        <div class="muted mb-3 small">
+            <strong>Legend:</strong> P = Present, A = Absent, L = Late, E = Excused
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Student Number</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in detailed_records %}
+                    <tr>
+                        <td>{{ record.student_name }}</td>
+                        <td>{{ record.student_number }}</td>
+                        <td>{{ record.date }}</td>
+                        <td><span class="badge {{ record.status }}">{{ record.status_code }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% elif show_details %}
+    <div class="card p-3 mb-3">
+        <div class="text-muted">No attendance records found for the selected filters.</div>
+    </div>
+    {% endif %}
+
+    {% if not show_details and report_rows %}
+    <div class="card p-3 mb-3">
+        <h6 class="text-uppercase text-muted mb-3">Summary by Class/Subject - Select a class above to view detailed records</h6>
+        <div class="grid">
+        {% for row in report_rows %}
+        <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                <div>
+                    <div class="fw-bold">{{ row.course.code }} — {{ row.course.title }}</div>
+                    <div class="muted">Section: {{ row.section.program.code }} Y{{ row.section.year_level.number }} {{ row.section.code }} · Term: {{ row.term }}</div>
+                    <div class="muted">Instructor: {% if row.instructor %}{{ row.instructor.get_full_name|default:row.instructor.email }}{% else %}Unassigned{% endif %}</div>
+                    <div class="muted">Schedule: {{ row.schedule|default:"TBA" }}</div>
+                </div>
+                <div class="text-end">
+                    <div class="badge">Rate: {{ row.stats.attendance_rate }}%</div>
+                    <div class="muted small">Total: {{ row.stats.total }}</div>
+                </div>
+            </div>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Present/Late</th>
+                        <th>Absent</th>
+                        <th>Excused</th>
+                        <th>Late</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ row.stats.present }}</td>
+                        <td>{{ row.stats.absent }}</td>
+                        <td>{{ row.stats.excused }}</td>
+                        <td>{{ row.stats.late }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+    </div>
+    </div>
+    {% elif not show_details %}
+        <div class="card p-3">No report data available.</div>
+    {% endif %}
+</div>
+
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

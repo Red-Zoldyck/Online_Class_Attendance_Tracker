@@ -13,13 +13,13 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import render
 from django.views.generic import ListView, DetailView, CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q, Count, Case, When, IntegerField
+from django.db.models import Q, Count, Case, When, IntegerField, OuterRef, Subquery
 from apps.attendance.models import AttendanceRecord
 from apps.attendance.serializers import (
     AttendanceRecordSerializer, AttendanceRecordDetailSerializer,
     BulkAttendanceSerializer
 )
-from apps.classes.models import Session, StudentEnrollment
+from apps.classes.models import Session, StudentEnrollment, StudentSection
 from apps.users.permissions import IsAdmin
 from apps.classes.permissions import IsInstructorOrAdmin
 import logging
@@ -288,14 +288,27 @@ class SessionAttendanceView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         # Get enrolled students for this class
         session = self.get_object()
+        section_subquery = StudentSection.objects.filter(
+            student_id=OuterRef('student_id'),
+            is_active=True
+        ).select_related('section__program', 'section__year_level').order_by('-created_at')
+
         context['students'] = StudentEnrollment.objects.filter(
             class_ref=session.class_ref,
             is_active=True
-        ).select_related('student')
+        ).select_related('student').annotate(
+            section_code=Subquery(section_subquery.values('section__code')[:1]),
+            section_program=Subquery(section_subquery.values('section__program__code')[:1]),
+            section_year=Subquery(section_subquery.values('section__year_level__number')[:1]),
+        )
         
         # Get existing attendance records for this session
         context['attendance_records'] = AttendanceRecord.objects.filter(
             session=session
+        ).select_related('student', 'marked_by').annotate(
+            section_code=Subquery(section_subquery.values('section__code')[:1]),
+            section_program=Subquery(section_subquery.values('section__program__code')[:1]),
+            section_year=Subquery(section_subquery.values('section__year_level__number')[:1]),
         )
         
         return context

@@ -125,3 +125,33 @@ class AttendanceRecord(models.Model):
             late_threshold = timezone.make_aware(session_start) + timedelta(minutes=15)
             return self.check_in_time > late_threshold
         return False
+
+
+class AttendanceIssue(models.Model):
+    """Student-reported attendance issue for admin review."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', _('Pending')
+        RESOLVED = 'resolved', _('Resolved')
+
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendance_issues')
+    section_course = models.ForeignKey('classes.SectionCourse', on_delete=models.CASCADE, related_name='attendance_issues')
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='attendance_issues')
+    claimed_status = models.CharField(max_length=20, choices=AttendanceRecord.AttendanceStatus.choices)
+    note = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_attendance_issues')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['section_course', 'created_at']),
+            models.Index(fields=['student', 'created_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"Issue {self.student.get_full_name()} {self.section_course} {self.claimed_status}"

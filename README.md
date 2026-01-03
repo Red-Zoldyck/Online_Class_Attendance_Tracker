@@ -29,7 +29,7 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 -ImportStudents
 
 What it does:
 - Creates venv (if missing) and installs requirements
-- Sets MySQL env vars (defaults: db=attendance_tracker, user=root, pass=@dmin123, host=localhost, port=3306)
+- Sets MySQL env vars (defaults: db=attendance_tracker, user=root, pass=[YourPassword], host=localhost, port=3306)
 - Applies migrations
 - Seeds default groups/permissions
 - Imports students from `Dump20260102.sql` when `-ImportStudents` is passed (skip the flag to avoid importing)
